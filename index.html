@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BLACKLINE // OPS — Tactical 3D FPS</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="viewport"></div>
+
+  <!-- Screen FX Overlays -->
+  <div id="damage-vignette"></div>
+  <div id="flash-overlay"></div>
+  <div id="damage-direction-container"></div>
+
+  <!-- Sniper Scope Overlay -->
+  <div id="sniper-scope" class="hidden">
+    <div class="scope-ring">
+      <div class="scope-line-h"></div>
+      <div class="scope-line-v"></div>
+      <div class="scope-mildots-h"></div>
+      <div class="scope-mildots-v"></div>
+      <div class="scope-center-dot"></div>
+    </div>
+  </div>
+
+  <!-- Active Combat HUD -->
+  <div id="hud" class="hidden">
+    <!-- Top Left: Minimap / UAV Radar -->
+    <div id="minimap-wrapper">
+      <div class="hud-panel minimap-frame">
+        <canvas id="minimap-canvas" width="210" height="210"></canvas>
+        <div class="minimap-compass-n">N</div>
+      </div>
+      <div id="minimap-zone-label">RADAR // ACTIVE</div>
+    </div>
+
+    <!-- Top Center: Match Scoreboard Header -->
+    <div id="match-header" class="hud-panel">
+      <div id="hud-mode-badge">TEAM DEATHMATCH</div>
+      <div class="match-score-row">
+        <div class="team-score blue">
+          <span class="team-tag" id="hud-left-tag">TF-141</span>
+          <span class="score-num" id="hud-score-left">0</span>
+        </div>
+        <div class="match-center-info">
+          <div id="hud-timer">05:00</div>
+          <div id="hud-score-limit">TARGET 50</div>
+        </div>
+        <div class="team-score red">
+          <span class="score-num" id="hud-score-right">0</span>
+          <span class="team-tag" id="hud-right-tag">SYNDICATE</span>
+        </div>
+      </div>
+      <div id="objective-banner" class="hidden"></div>
+    </div>
+
+    <!-- Top Right: Live Killfeed -->
+    <div id="killfeed"></div>
+
+    <!-- Center Reticle, Hitmarker, XP & Announcements -->
+    <div id="crosshair">
+      <div class="ch-prong" id="ch-top"></div>
+      <div class="ch-prong" id="ch-bottom"></div>
+      <div class="ch-prong" id="ch-left"></div>
+      <div class="ch-prong" id="ch-right"></div>
+      <div id="ch-dot"></div>
+    </div>
+
+    <div id="hitmarker">
+      <span class="hm-tick hm-tl"></span>
+      <span class="hm-tick hm-tr"></span>
+      <span class="hm-tick hm-bl"></span>
+      <span class="hm-tick hm-br"></span>
+    </div>
+
+    <div id="interact-prompt" class="hidden">[E] RESUPPLY AMMO &amp; ARMOR</div>
+    <div id="xp-feed"></div>
+    <div id="streak-banner" class="hidden"></div>
+
+    <!-- Bottom Left: Vitals & Killstreaks -->
+    <div id="bottom-left-hud">
+      <div id="killstreak-rack">
+        <div class="ks-slot" id="ks-slot-0">
+          <div class="ks-key">[4]</div>
+          <div class="ks-info">
+            <div class="ks-name">UAV RECON</div>
+            <div class="ks-bar"><div class="ks-fill"></div></div>
+          </div>
+          <div class="ks-cost">3</div>
+        </div>
+        <div class="ks-slot" id="ks-slot-1">
+          <div class="ks-key">[5]</div>
+          <div class="ks-info">
+            <div class="ks-name">AIRSTRIKE</div>
+            <div class="ks-bar"><div class="ks-fill"></div></div>
+          </div>
+          <div class="ks-cost">5</div>
+        </div>
+        <div class="ks-slot" id="ks-slot-2">
+          <div class="ks-key">[6]</div>
+          <div class="ks-info">
+            <div class="ks-name">GUNSHIP</div>
+            <div class="ks-bar"><div class="ks-fill"></div></div>
+          </div>
+          <div class="ks-cost">7</div>
+        </div>
+      </div>
+
+      <div id="vitals-panel" class="hud-panel">
+        <div class="vital-header">
+          <span id="stance-label">STAND</span>
+          <span class="vital-hint">STAMINA</span>
+        </div>
+        <div class="bar-track stamina-track">
+          <div id="stamina-bar-fill"></div>
+        </div>
+
+        <div class="vital-row">
+          <span class="vital-label armor-color">ARMOR</span>
+          <span class="vital-num" id="armor-value">50</span>
+        </div>
+        <div class="bar-track armor-track">
+          <div id="armor-bar-fill"></div>
+        </div>
+
+        <div class="vital-row">
+          <span class="vital-label hp-color">HEALTH</span>
+          <span class="vital-num" id="hp-value">100</span>
+        </div>
+        <div class="bar-track hp-track">
+          <div id="hp-bar-fill"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Right: Weapon, Ammo & Equipment -->
+    <div id="weapon-panel" class="hud-panel">
+      <div class="weapon-top-row">
+        <div>
+          <div id="weapon-name">M4A1 TACTICAL</div>
+          <div id="weapon-firemode">FULL AUTO // 5.56</div>
+        </div>
+        <div class="slot-badges">
+          <span class="slot-badge active" id="slot-1-badge">1 PRI</span>
+          <span class="slot-badge" id="slot-2-badge">2 SEC</span>
+        </div>
+      </div>
+
+      <div class="ammo-display">
+        <span id="ammo-mag">30</span>
+        <span class="ammo-sep">/</span>
+        <span id="ammo-reserve">150</span>
+      </div>
+      <div id="reload-indicator" class="hidden">RELOADING...</div>
+
+      <div id="equipment-rack">
+        <div class="equip-item"><span class="eq-key">[G]</span> FRAG <strong id="frag-count">2</strong></div>
+        <div class="equip-item"><span class="eq-key">[Q]</span> FLASH <strong id="flash-count">2</strong></div>
+        <div class="equip-item"><span class="eq-key">[X]</span> STIM <strong id="stim-status">RDY</strong></div>
+        <div class="equip-item"><span class="eq-key">[V]</span> KNIFE</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Respawn / Elimination Banner -->
+  <div id="respawn-overlay" class="hidden">
+    <div class="respawn-card">
+      <div class="respawn-title">KIA // ELIMINATED</div>
+      <div class="respawn-detail">
+        BY <span id="respawn-killer">GHOST-04</span> WITH <span id="respawn-weapon">M4A1</span>
+      </div>
+      <div class="respawn-countdown">REDEPLOYING IN <span id="respawn-timer">3.0</span>s</div>
+    </div>
+  </div>
+
+  <!-- Tab Live Scoreboard -->
+  <div id="scoreboard-overlay" class="hidden">
+    <div class="scoreboard-box">
+      <div class="scoreboard-header">
+        <h2 id="scoreboard-title">TACTICAL SCOREBOARD</h2>
+        <span class="scoreboard-sub">[TAB] HOLD TO VIEW</span>
+      </div>
+      <table class="score-table">
+        <thead>
+          <tr>
+            <th>OPERATOR</th>
+            <th>TEAM</th>
+            <th>KILLS</th>
+            <th>DEATHS</th>
+            <th>K/D</th>
+            <th>SCORE</th>
+          </tr>
+        </thead>
+        <tbody id="scoreboard-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Main Lobby & Loadout Armory -->
+  <div id="lobby-screen" class="screen-overlay">
+    <div class="lobby-container">
+      <header class="lobby-header">
+        <div>
+          <div class="lobby-kicker">TASK FORCE 141 // COMBAT SIMULATOR</div>
+          <h1 class="lobby-title">BLACKLINE <span>OPS</span></h1>
+        </div>
+        <div id="career-badge" class="career-card">
+          <div class="career-rank" id="career-rank-title">RANK 1 // PRIVATE</div>
+          <div class="career-stats-line" id="career-stats-line">0 KILLS • 0 BEST STREAK</div>
+          <div class="career-xp-track"><div id="career-xp-fill"></div></div>
+        </div>
+      </header>
+
+      <div class="lobby-grid">
+        <!-- Column 1: Match Setup -->
+        <section class="lobby-card">
+          <h2 class="section-title">01 // OPERATION SETUP</h2>
+
+          <label class="field-label" for="select-map">COMBAT ZONE</label>
+          <select id="select-map" class="tac-select">
+            <option value="killhouse">CARGO YARD // SHIPMENT-OPS (CQB)</option>
+            <option value="blacksite">BLACKSITE COMPOUND (MID-LONG)</option>
+          </select>
+
+          <label class="field-label" for="select-mode">GAME MODE</label>
+          <select id="select-mode" class="tac-select">
+            <option value="tdm">TEAM DEATHMATCH (5v5 • TARGET 50)</option>
+            <option value="ffa">FREE-FOR-ALL (8 OPERATORS • TARGET 30)</option>
+            <option value="hardpoint">HARDPOINT (5v5 OBJECTIVE • TARGET 250)</option>
+            <option value="survival">SURVIVAL WAVES (SOLO VS ESCALATING SQUADS)</option>
+          </select>
+
+          <label class="field-label" for="select-difficulty">BOT AI SKILL</label>
+          <select id="select-difficulty" class="tac-select">
+            <option value="recruit">RECRUIT (CASUAL)</option>
+            <option value="regular" selected>REGULAR (TACTICAL)</option>
+            <option value="veteran">VETERAN (LETHAL)</option>
+          </select>
+
+          <div class="settings-split">
+            <div>
+              <label class="field-label" for="input-sens">MOUSE SENS: <span id="sens-val">1.0</span></label>
+              <input id="input-sens" type="range" min="0.2" max="2.5" step="0.05" value="1.0" />
+            </div>
+            <div>
+              <label class="field-label" for="input-fov">BASE FOV: <span id="fov-val">82</span>°</label>
+              <input id="input-fov" type="range" min="65" max="110" step="1" value="82" />
+            </div>
+          </div>
+
+          <label class="field-label" for="select-quality">GRAPHICS PROFILE</label>
+          <select id="select-quality" class="tac-select">
+            <option value="high" selected>HIGH (REAL-TIME SHADOWS + PBR)</option>
+            <option value="medium">MEDIUM (BALANCED)</option>
+            <option value="low">PERFORMANCE (MAX FPS)</option>
+          </select>
+        </section>
+
+        <!-- Column 2: Armory Loadout -->
+        <section class="lobby-card">
+          <h2 class="section-title">02 // CUSTOM LOADOUT</h2>
+
+          <label class="field-label" for="select-primary">PRIMARY WEAPON</label>
+          <select id="select-primary" class="tac-select">
+            <option value="m4a1">M4A1 TACTICAL (ASSAULT RIFLE)</option>
+            <option value="ak47">AK-47 KASTOV (HEAVY AR)</option>
+            <option value="mp5">MP5-SD5 (SUPPRESSED SMG)</option>
+            <option value="spas12">SPAS-12 BREACHER (12G SHOTGUN)</option>
+            <option value="m249">M249 SAW (80RD LMG)</option>
+            <option value="sniper">M200 INTERVENTION (.408 SNIPER)</option>
+          </select>
+
+          <div id="primary-stats" class="weapon-stats-box"></div>
+
+          <label class="field-label" for="select-secondary">SIDEARM</label>
+          <select id="select-secondary" class="tac-select">
+            <option value="deagle">DESERT EAGLE .50 (HIGH CALIBER)</option>
+            <option value="g18">GLOCK-18 AUTO (MACHINE PISTOL)</option>
+          </select>
+
+          <label class="field-label" for="select-perk">COMBAT PERK</label>
+          <select id="select-perk" class="tac-select">
+            <option value="sleight">SLEIGHT OF HAND (+40% RELOAD SPEED)</option>
+            <option value="lightweight">LIGHTWEIGHT (+15% SPRINT &amp; SLIDE)</option>
+            <option value="scavenger">SCAVENGER (KILLS REFILL AMMO &amp; GRENADES)</option>
+            <option value="juggernaut">ARMORED CORE (+35 MAX ARMOR)</option>
+          </select>
+        </section>
+
+        <!-- Column 3: Field Manual & Deploy -->
+        <section class="lobby-card lobby-deploy-col">
+          <h2 class="section-title">03 // FIELD CONTROLS</h2>
+          <ul class="controls-list">
+            <li><span>WASD</span> Move • <span>SHIFT</span> Sprint</li>
+            <li><span>SPACE</span> Jump • <span>C / CTRL</span> Crouch / Slide</li>
+            <li><span>LMB</span> Fire • <span>RMB</span> Aim Down Sights (ADS)</li>
+            <li><span>R</span> Reload • <span>1 / 2 / WHEEL</span> Swap Gun</li>
+            <li><span>G</span> Frag Grenade • <span>Q</span> Flashbang</li>
+            <li><span>X</span> Stim Heal • <span>V</span> Combat Knife</li>
+            <li><span>E</span> Supply Crate • <span>4 / 5 / 6</span> Killstreaks</li>
+            <li><span>TAB</span> Scoreboard • <span>ESC</span> Pause / Settings</li>
+          </ul>
+
+          <div class="killstreak-brief">
+            <strong>KILLSTREAKS:</strong> 3 Kills UAV • 5 Kills Precision Airstrike • 7 Kills Gunship Overdrive
+          </div>
+
+          <button id="btn-deploy" class="btn-primary">DEPLOY INTO COMBAT</button>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- Precision Airstrike Tactical Tablet -->
+  <div id="airstrike-modal" class="screen-overlay hidden">
+    <div class="airstrike-tablet">
+      <div class="airstrike-header">
+        <div>
+          <div class="airstrike-kicker">CLOSE AIR SUPPORT // TACTICAL LINK</div>
+          <h2 class="airstrike-title">PRECISION AIRSTRIKE TARGETING</h2>
+        </div>
+        <button id="btn-cancel-airstrike" class="btn-danger airstrike-abort-btn">ABORT [5]</button>
+      </div>
+      <div class="airstrike-canvas-wrap">
+        <canvas id="airstrike-canvas" width="460" height="460"></canvas>
+      </div>
+      <div class="airstrike-footer">
+        <span><strong>LMB</strong> Designate Strike Zone</span>
+        <span><strong>RMB / SCROLL</strong> Rotate Bomb Run</span>
+        <span><strong>[5] / ESC</strong> Abort &amp; Keep Streak</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pause Menu -->
+  <div id="pause-screen" class="screen-overlay hidden">
+    <div class="modal-card">
+      <h2 class="modal-title">COMBAT PAUSED</h2>
+      <div class="pause-controls">
+        <label class="field-label" for="pause-sens">SENSITIVITY: <span id="pause-sens-val">1.0</span></label>
+        <input id="pause-sens" type="range" min="0.2" max="2.5" step="0.05" value="1.0" />
+
+        <label class="field-label" for="pause-fov">BASE FOV: <span id="pause-fov-val">82</span>°</label>
+        <input id="pause-fov" type="range" min="65" max="110" step="1" value="82" />
+
+        <label class="field-label" for="pause-volume">MASTER AUDIO: <span id="pause-vol-val">80</span>%</label>
+        <input id="pause-volume" type="range" min="0" max="100" step="5" value="80" />
+
+        <hr class="modal-divider" />
+        <div class="field-label">NEXT DEPLOY LOADOUT</div>
+        <select id="pause-primary" class="tac-select">
+          <option value="m4a1">M4A1 TACTICAL</option>
+          <option value="ak47">AK-47 KASTOV</option>
+          <option value="mp5">MP5-SD5</option>
+          <option value="spas12">SPAS-12 BREACHER</option>
+          <option value="m249">M249 SAW</option>
+          <option value="sniper">M200 INTERVENTION</option>
+        </select>
+        <select id="pause-secondary" class="tac-select">
+          <option value="deagle">DESERT EAGLE .50</option>
+          <option value="g18">GLOCK-18 AUTO</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button id="btn-resume" class="btn-primary">RESUME COMBAT</button>
+        <button id="btn-restart" class="btn-secondary">RESTART MATCH</button>
+        <button id="btn-quit-lobby" class="btn-danger">EXIT TO LOBBY</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Match Complete / Summary Screen -->
+  <div id="gameover-screen" class="screen-overlay hidden">
+    <div class="modal-card modal-wide">
+      <div id="gameover-result" class="gameover-title">VICTORY</div>
+      <div id="gameover-sub" class="gameover-sub">MISSION ACCOMPLISHED</div>
+      <div id="gameover-stats" class="gameover-stats-grid"></div>
+      <div id="gameover-scoreboard"></div>
+      <div class="modal-actions row-actions">
+        <button id="btn-play-again" class="btn-primary">PLAY AGAIN</button>
+        <button id="btn-back-lobby" class="btn-secondary">RETURN TO ARMORY</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
